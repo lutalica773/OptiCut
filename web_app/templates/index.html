@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_name }} v{{ version }}</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --panel: #0f172a;
+        --border: #1f2a44;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --accent: #f97316;
+        --good: #34d399;
+        --bad: #fb7185;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+          "Segoe UI Emoji";
+        background: radial-gradient(1200px 800px at 20% 0%, #122042 0%, var(--bg) 55%);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 28px 18px 48px;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .brand {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+      }
+      .ver { color: var(--muted); font-size: 13px; }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+      @media (min-width: 860px) {
+        .grid { grid-template-columns: 360px 1fr; align-items: start; }
+      }
+      .card {
+        background: color-mix(in srgb, var(--panel) 96%, black 4%);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      }
+      .card h2 {
+        font-size: 14px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 12px;
+      }
+      .row { display: grid; grid-template-columns: 1fr 110px; gap: 10px; margin-bottom: 10px; align-items: center; }
+      label { color: var(--text); font-size: 13px; }
+      input {
+        width: 100%;
+        padding: 10px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: #0b1326;
+        color: var(--text);
+        outline: none;
+      }
+      input:focus { border-color: color-mix(in srgb, var(--accent) 65%, var(--border) 35%); }
+      button {
+        width: 100%;
+        padding: 12px 12px;
+        border-radius: 12px;
+        border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border) 45%);
+        background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, white 8%) 0%, var(--accent) 100%);
+        color: #111827;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button:hover { filter: brightness(1.03); }
+      .errors {
+        border: 1px solid color-mix(in srgb, var(--bad) 55%, var(--border) 45%);
+        background: color-mix(in srgb, var(--bad) 12%, var(--panel) 88%);
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+      .errors li { color: #fecdd3; margin: 6px 0; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+      th, td {
+        padding: 10px 10px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        font-size: 13px;
+      }
+      th {
+        background: #0b1326;
+        color: var(--muted);
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.35px;
+      }
+      tr:last-child td { border-bottom: none; }
+      .muted { color: var(--muted); }
+      .pill {
+        display: inline-block;
+        padding: 6px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      @media (min-width: 860px) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+      .kpi {
+        background: #0b1326;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .kpi .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.35px; }
+      .kpi .value { font-size: 16px; font-weight: 800; margin-top: 6px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="header">
+        <div class="brand">{{ app_name }}</div>
+        <div class="ver">v{{ version }} · Web</div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Inputs</h2>
+          <form method="post">
+            <div class="row">
+              <label for="width">Width (mm)</label>
+              <input id="width" name="width" value="{{ form.width }}" />
+            </div>
+            <div class="row">
+              <label for="height">Height (mm)</label>
+              <input id="height" name="height" value="{{ form.height }}" />
+            </div>
+            <div class="row">
+              <label for="depth">Depth (mm)</label>
+              <input id="depth" name="depth" value="{{ form.depth }}" />
+            </div>
+            <div class="row">
+              <label for="thickness">Thickness (mm)</label>
+              <input id="thickness" name="thickness" value="{{ form.thickness }}" />
+            </div>
+            <div style="margin-top: 14px">
+              <button type="submit">Calculate</button>
+            </div>
+            <div style="margin-top: 12px" class="pill">Overmeasure: +{{ overmeasure_mm }} mm</div>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Results</h2>
+
+          {% if errors and errors|length > 0 %}
+          <div class="errors">
+            <ul style="margin: 0; padding-left: 18px">
+              {% for e in errors %}
+              <li>{{ e }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+
+          {% if material and material.surface_m2 is defined %}
+          <div class="kpis" style="margin-bottom: 12px">
+            <div class="kpi">
+              <div class="label">Surface</div>
+              <div class="value">{{ material.surface_m2 }} m²</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Volume</div>
+              <div class="value">{{ material.volume_m3 }} m³</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Edge Banding</div>
+              <div class="value">{{ material.edge_banding_m }} m</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Dowels</div>
+              <div class="value">{{ material.dowels_count }}</div>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="muted" style="margin: 8px 0 10px">Cut list</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Poz</th>
+                <th>Qty</th>
+                <th>Name</th>
+                <th>Raw</th>
+                <th>Final</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if cut_list and cut_list|length > 0 %}
+                {% for row in cut_list %}
+                <tr>
+                  <td>{{ row.poz }}</td>
+                  <td>{{ row.qty }}</td>
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.raw }}</td>
+                  <td>{{ row.final }}</td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="5" class="muted">Enter dimensions and click Calculate.</td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
