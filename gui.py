@@ -5,7 +5,7 @@ import queue
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from config import (
     APP_NAME,
@@ -53,16 +53,16 @@ def _format_percent(done: int, total: int) -> str:
 
 def _user_friendly_error(err: Exception) -> str:
     if isinstance(err, SecurityError):
-        return "Posodobitev je blokirana zaradi varnosti (HTTPS/validacija)."
+        return "Update blocked for security reasons (HTTPS/validation)."
     if isinstance(err, ChecksumError):
-        return "Prenesena posodobitev ni prestala verifikacije (SHA256)."
+        return "Downloaded update failed verification (SHA256 checksum mismatch)."
     if isinstance(err, DownloadError):
-        return "Prenos ni uspel. Preverite internet povezavo in poskusite znova."
+        return "Download failed. Check your connection and try again."
     if isinstance(err, NetworkError):
-        return "Ni mogoče preveriti posodobitev (ni internet povezave)."
+        return "Unable to check for updates (no internet)."
     if isinstance(err, UpdateError):
-        return str(err) or "Napaka pri posodabljanju."
-    return "Nepričakovana napaka."
+        return str(err) or "Update error."
+    return "Unexpected error."
 
 
 class App(tk.Tk):
@@ -70,8 +70,18 @@ class App(tk.Tk):
         super().__init__()
 
         self.title(f"{APP_NAME} v{VERSION}")
-        self.minsize(720, 520)
+        self.minsize(920, 560)
 
+        self._apply_styles()
+        self._set_window_icon()
+
+        self._entries: Dict[str, ttk.Entry] = {}
+        self._build_ui()
+        self._bind_shortcuts()
+
+        self.after(600, self.check_updates_startup)
+
+    def _apply_styles(self) -> None:
         style = ttk.Style(self)
         try:
             style.theme_use("clam")
@@ -79,120 +89,188 @@ class App(tk.Tk):
             pass
 
         style.configure("TButton", padding=(10, 8))
-        style.configure("Primary.TButton", padding=(14, 10), font=("Segoe UI", 10, "bold"))
-        style.configure("Header.TLabel", font=("Segoe UI", 12, "bold"))
+        style.configure("Primary.TButton", padding=(14, 11), font=("Segoe UI", 10, "bold"))
+        style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"))
+        style.configure("SubHeader.TLabel", font=("Segoe UI", 10, "bold"))
         style.configure("Hint.TLabel", foreground="#6B7280")
         style.configure("Status.TLabel", font=("Segoe UI", 10))
+        style.configure("Card.TFrame", padding=16)
+        style.configure("Toolbar.TFrame", padding=(14, 12))
+        style.configure("Statusbar.TFrame", padding=(14, 8))
 
+    def _set_window_icon(self) -> None:
+        try:
+            import sys
+
+            base_dir = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else __file__)
+            icon_path = os.path.join(base_dir, "icon.ico")
+            if os.path.exists(icon_path):
+                self.iconbitmap(icon_path)
+        except Exception:
+            pass
+
+    def _build_ui(self) -> None:
         root = ttk.Frame(self, padding=18)
         root.grid(row=0, column=0, sticky="nsew")
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
         root.grid_columnconfigure(0, weight=1)
 
-        header = ttk.Frame(root)
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
-        header.grid_columnconfigure(0, weight=1)
-        ttk.Label(header, text=APP_NAME, style="Header.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(header, text=f"v{VERSION}", style="Hint.TLabel").grid(row=0, column=1, sticky="e")
+        toolbar = ttk.Frame(root, style="Toolbar.TFrame")
+        toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+        toolbar.grid_columnconfigure(2, weight=1)
+
+        ttk.Label(toolbar, text=APP_NAME, style="Header.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(toolbar, text=f"v{VERSION}", style="Hint.TLabel").grid(row=0, column=1, sticky="w", padx=(10, 0))
+
+        self.btn_updates = ttk.Button(toolbar, text="Check updates", command=self.check_updates_startup)
+        self.btn_updates.grid(row=0, column=3, sticky="e")
+
+        content = ttk.Frame(root)
+        content.grid(row=1, column=0, sticky="nsew")
+        root.grid_rowconfigure(1, weight=1)
+        content.grid_columnconfigure(0, weight=1)
+        content.grid_rowconfigure(0, weight=1)
+
+        grid = ttk.Frame(content)
+        grid.grid(row=0, column=0, sticky="n")
+        grid.grid_columnconfigure(0, weight=1)
+        grid.grid_columnconfigure(1, weight=1)
+
+        left = ttk.Frame(grid, style="Card.TFrame")
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        left.grid_columnconfigure(0, weight=1)
+
+        right = ttk.Frame(grid, style="Card.TFrame")
+        right.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        right.grid_columnconfigure(0, weight=1)
+
+        ttk.Label(left, text="Inputs", style="SubHeader.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 10))
+
+        form = ttk.Frame(left)
+        form.grid(row=1, column=0, sticky="ew")
+        form.grid_columnconfigure(1, weight=1)
 
         self.var_width = tk.StringVar(value="600")
         self.var_height = tk.StringVar(value="800")
         self.var_depth = tk.StringVar(value="350")
         self.var_thickness = tk.StringVar(value="19")
         self.var_shelves = tk.StringVar(value="1")
-
         self.var_carcass_material = tk.StringVar(value=CARCASS_MATERIAL_DEFAULT)
         self.var_back_material = tk.StringVar(value=BACK_MATERIAL_DEFAULT)
 
-        content = ttk.Frame(root)
-        content.grid(row=1, column=0, sticky="n")
-        root.grid_rowconfigure(1, weight=1)
-        content.grid_columnconfigure(0, weight=1)
+        def add_field(r: int, label: str, var: tk.StringVar, unit: str = "mm") -> None:
+            ttk.Label(form, text=label).grid(row=r, column=0, sticky="w", pady=8, padx=(0, 12))
+            ent = ttk.Entry(form, textvariable=var, width=20)
+            ent.grid(row=r, column=1, sticky="ew", pady=8)
+            ttk.Label(form, text=unit, style="Hint.TLabel").grid(row=r, column=2, sticky="w", pady=8, padx=(10, 0))
+            self._entries[label.lower()] = ent
 
-        input_panel = ttk.LabelFrame(content, text="Input", padding=14)
-        input_panel.grid(row=0, column=0, sticky="ew")
-        input_panel.grid_columnconfigure(1, weight=1)
+        add_field(0, "Width", self.var_width)
+        add_field(1, "Height", self.var_height)
+        add_field(2, "Depth", self.var_depth)
+        add_field(3, "Thickness", self.var_thickness)
 
-        def add_labeled_entry(r: int, label: str, var: tk.StringVar, suffix: str = "mm") -> None:
-            ttk.Label(input_panel, text=label).grid(row=r, column=0, sticky="w", pady=6, padx=(0, 10))
-            ttk.Entry(input_panel, textvariable=var, width=18).grid(row=r, column=1, sticky="w", pady=6)
-            ttk.Label(input_panel, text=suffix, style="Hint.TLabel").grid(row=r, column=2, sticky="w", pady=6, padx=(8, 0))
+        ttk.Label(form, text="Shelves").grid(row=4, column=0, sticky="w", pady=8, padx=(0, 12))
+        self.spin_shelves = ttk.Spinbox(form, from_=0, to=MAX_SHELVES, textvariable=self.var_shelves, width=18)
+        self.spin_shelves.grid(row=4, column=1, sticky="w", pady=8)
+        ttk.Label(form, text="pcs", style="Hint.TLabel").grid(row=4, column=2, sticky="w", pady=8, padx=(10, 0))
 
-        add_labeled_entry(0, "Width", self.var_width)
-        add_labeled_entry(1, "Height", self.var_height)
-        add_labeled_entry(2, "Depth", self.var_depth)
-        add_labeled_entry(3, "Thickness", self.var_thickness)
+        ttk.Separator(left).grid(row=2, column=0, sticky="ew", pady=14)
+        ttk.Label(left, text="Materials", style="SubHeader.TLabel").grid(row=3, column=0, sticky="w", pady=(0, 10))
 
-        ttk.Label(input_panel, text="Shelves").grid(row=4, column=0, sticky="w", pady=6, padx=(0, 10))
-        ttk.Spinbox(input_panel, from_=0, to=MAX_SHELVES, textvariable=self.var_shelves, width=16).grid(
-            row=4, column=1, sticky="w", pady=6
-        )
-        ttk.Label(input_panel, text="pcs", style="Hint.TLabel").grid(row=4, column=2, sticky="w", pady=6, padx=(8, 0))
+        mats = ttk.Frame(left)
+        mats.grid(row=4, column=0, sticky="ew")
+        mats.grid_columnconfigure(1, weight=1)
 
-        ttk.Label(input_panel, text="Carcass material").grid(row=5, column=0, sticky="w", pady=6, padx=(0, 10))
+        ttk.Label(mats, text="Carcass").grid(row=0, column=0, sticky="w", pady=8, padx=(0, 12))
         ttk.Combobox(
-            input_panel,
+            mats,
             textvariable=self.var_carcass_material,
             values=CARCASS_MATERIAL_OPTIONS,
             state="readonly",
-            width=18,
-        ).grid(row=5, column=1, sticky="w", pady=6)
+            width=22,
+        ).grid(row=0, column=1, sticky="w", pady=8)
 
-        ttk.Label(input_panel, text="Back material").grid(row=6, column=0, sticky="w", pady=6, padx=(0, 10))
+        ttk.Label(mats, text="Back").grid(row=1, column=0, sticky="w", pady=8, padx=(0, 12))
         ttk.Combobox(
-            input_panel,
+            mats,
             textvariable=self.var_back_material,
             values=BACK_MATERIAL_OPTIONS,
             state="readonly",
-            width=18,
-        ).grid(row=6, column=1, sticky="w", pady=6)
+            width=22,
+        ).grid(row=1, column=1, sticky="w", pady=8)
 
-        actions = ttk.LabelFrame(content, text="Actions", padding=14)
-        actions.grid(row=1, column=0, sticky="ew", pady=(12, 0))
-        actions.grid_columnconfigure(0, weight=1)
-        ttk.Button(actions, text="Generate Excel", style="Primary.TButton", command=self.on_generate).grid(
-            row=0, column=0, sticky="ew"
-        )
-        ttk.Label(actions, text=f"Overmeasure +{OVERMEASURE_MM} mm | Kerf {KERF_MM} mm", style="Hint.TLabel").grid(
-            row=1, column=0, sticky="w", pady=(10, 0)
+        ttk.Label(right, text="Actions", style="SubHeader.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 10))
+
+        self.btn_generate = ttk.Button(right, text="Generate Excel", style="Primary.TButton", command=self.on_generate)
+        self.btn_generate.grid(row=1, column=0, sticky="ew")
+
+        ttk.Label(right, text=f"Overmeasure +{OVERMEASURE_MM} mm · Kerf {KERF_MM} mm", style="Hint.TLabel").grid(
+            row=2, column=0, sticky="w", pady=(10, 0)
         )
 
-        status_panel = ttk.LabelFrame(content, text="Status", padding=14)
-        status_panel.grid(row=2, column=0, sticky="ew", pady=(12, 0))
-        status_panel.grid_columnconfigure(0, weight=1)
+        ttk.Separator(right).grid(row=3, column=0, sticky="ew", pady=14)
+        ttk.Label(right, text="Status", style="SubHeader.TLabel").grid(row=4, column=0, sticky="w", pady=(0, 10))
+
         self.status_var = tk.StringVar(value="Ready.")
-        self.status_label = ttk.Label(status_panel, textvariable=self.status_var, style="Status.TLabel", wraplength=560)
-        self.status_label.grid(row=0, column=0, sticky="w")
+        self.status_label = ttk.Label(right, textvariable=self.status_var, style="Status.TLabel", wraplength=340)
+        self.status_label.grid(row=5, column=0, sticky="w")
 
-        self.after(350, self.check_updates_startup)
+        statusbar = ttk.Frame(root, style="Statusbar.TFrame")
+        statusbar.grid(row=2, column=0, sticky="ew")
+        statusbar.grid_columnconfigure(0, weight=1)
+        self.statusbar_var = tk.StringVar(value="Ready.")
+        ttk.Label(statusbar, textvariable=self.statusbar_var, style="Hint.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(statusbar, text="Ctrl+Enter: Generate", style="Hint.TLabel").grid(row=0, column=1, sticky="e")
+
+        try:
+            self._entries["width"].focus_set()
+        except Exception:
+            pass
+
+    def _bind_shortcuts(self) -> None:
+        self.bind("<Control-Return>", lambda _e: self.on_generate())
+        self.bind("<Control-Enter>", lambda _e: self.on_generate())
+        self.bind("<Control-u>", lambda _e: self.check_updates_startup())
 
     def _parse_int(self, label: str, value: str) -> int:
         try:
             return int(str(value).strip())
         except ValueError as e:
-            raise ValidationError([f"{label} mora biti celo število (mm)."]) from e
+            raise ValidationError([f"{label} must be an integer (mm)."]) from e
+
+    def _set_status(self, text: str, ok: bool) -> None:
+        msg = (text or "").strip()
+        self.status_var.set(msg)
+        self.statusbar_var.set(msg)
+        color = "#065F46" if ok else "#991B1B"
+        try:
+            self.status_label.configure(foreground=color)
+        except tk.TclError:
+            pass
 
     def on_generate(self) -> None:
         try:
             cabinet = Cabinet(
-                width=self._parse_int("Širina", self.var_width.get()),
-                height=self._parse_int("Višina", self.var_height.get()),
-                depth=self._parse_int("Globina", self.var_depth.get()),
-                thickness=self._parse_int("Debelina", self.var_thickness.get()),
+                width=self._parse_int("Width", self.var_width.get()),
+                height=self._parse_int("Height", self.var_height.get()),
+                depth=self._parse_int("Depth", self.var_depth.get()),
+                thickness=self._parse_int("Thickness", self.var_thickness.get()),
             )
-            shelves_count = self._parse_int("Število polic", self.var_shelves.get())
+            shelves_count = self._parse_int("Shelves", self.var_shelves.get())
 
             validate(cabinet, shelves_count)
             elements = calculate_elements(cabinet, shelves_count)
             summary = calculate_materials(cabinet, shelves_count, elements)
 
             file_path = filedialog.asksaveasfilename(
-                title="Shrani Excel",
+                title="Save Excel",
                 defaultextension=".xlsx",
                 filetypes=[("Excel", "*.xlsx")],
             )
             if not file_path:
+                self._set_status("Canceled.", ok=True)
                 return
 
             export_excel(
@@ -205,23 +283,15 @@ class App(tk.Tk):
             )
 
             self._set_status("Excel generated successfully.", ok=True)
-            messagebox.showinfo("OK", "Excel created.")
+            messagebox.showinfo("Success", "Excel created.")
 
         except ValidationError as e:
             msg = "\n".join(e.messages)
             self._set_status(msg, ok=False)
-            messagebox.showerror("Error (validation)", msg)
+            messagebox.showerror("Validation error", msg)
         except Exception as e:
             self._set_status(str(e), ok=False)
             messagebox.showerror("Error", str(e))
-
-    def _set_status(self, text: str, ok: bool) -> None:
-        self.status_var.set(text.strip() if text else "")
-        color = "#065F46" if ok else "#991B1B"
-        try:
-            self.status_label.configure(foreground=color)
-        except tk.TclError:
-            pass
 
     def check_updates_startup(self) -> None:
         manifest = UPDATE_MANIFEST_URL.strip()
@@ -232,14 +302,13 @@ class App(tk.Tk):
             try:
                 info = check_for_update(manifest, VERSION)
             except Exception:
-                # startup check is silent by default
                 return
 
             if not info:
                 return
 
             def prompt() -> None:
-                if not messagebox.askyesno("Update", f"Nova verzija je na voljo ({info.version}). Želite posodobiti?"):
+                if not messagebox.askyesno("Update", f"New version available ({info.version}). Update now?"):
                     return
                 self._download_and_install(info)
 
@@ -249,7 +318,7 @@ class App(tk.Tk):
 
     def _download_and_install(self, info) -> None:
         if not _can_auto_update():
-            messagebox.showwarning("Update", "Auto-update je podprt samo v paketirani Windows .exe verziji.")
+            messagebox.showwarning("Update", "Auto-update is supported only in the packaged Windows .exe build.")
             return
 
         dlg, bar, lbl = self._create_progress_dialog()
@@ -309,7 +378,7 @@ class App(tk.Tk):
 
     def _create_progress_dialog(self) -> Tuple[tk.Toplevel, ttk.Progressbar, ttk.Label]:
         dlg = tk.Toplevel(self)
-        dlg.title("Posodabljanje...")
+        dlg.title("Updating...")
         dlg.resizable(False, False)
         dlg.transient(self)
         dlg.grab_set()
@@ -317,10 +386,10 @@ class App(tk.Tk):
         frame = ttk.Frame(dlg, padding=16)
         frame.grid(row=0, column=0, sticky="nsew")
 
-        lbl = ttk.Label(frame, text="Prenašanje posodobitve...")
+        lbl = ttk.Label(frame, text="Downloading update...")
         lbl.grid(row=0, column=0, sticky="w")
 
-        bar = ttk.Progressbar(frame, mode="determinate", length=360)
+        bar = ttk.Progressbar(frame, mode="determinate", length=380)
         bar.grid(row=1, column=0, sticky="ew", pady=(10, 0))
 
         dlg.update_idletasks()
@@ -333,12 +402,12 @@ class App(tk.Tk):
                 bar.configure(mode="determinate")
             bar.configure(maximum=total)
             bar["value"] = done
-            lbl.configure(text=f"Prenašanje posodobitve... {_format_percent(done, total)}")
+            lbl.configure(text=f"Downloading update... {_format_percent(done, total)}")
         else:
             if str(bar["mode"]) != "indeterminate":
                 bar.configure(mode="indeterminate")
                 bar.start(10)
-            lbl.configure(text="Prenašanje posodobitve...")
+            lbl.configure(text="Downloading update...")
 
     def _exit_for_update(self) -> None:
         try:
@@ -350,3 +419,4 @@ class App(tk.Tk):
 def main() -> None:
     app = App()
     app.mainloop()
+

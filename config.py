@@ -5,7 +5,7 @@ KERF_MM = 3  # rez žage (mm) - informativno
 OVERMEASURE_MM = 10  # nadmera za prirez (mm)
 
 # App updates (Windows .exe only)
-UPDATE_MANIFEST_URL = "https://server.com/app.json"
+UPDATE_MANIFEST_URL = "https://github.com/lutalica773/OptiCut"
 UPDATE_REQUIRE_SAME_HOST = True
 UPDATE_MAX_DOWNLOAD_BYTES = 200 * 1024 * 1024  # 200MB safety limit
 
