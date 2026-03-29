@@ -166,10 +166,10 @@ class App(tk.Tk):
             ttk.Label(form, text=unit, style="Hint.TLabel").grid(row=r, column=2, sticky="w", pady=8, padx=(10, 0))
             self._entries[label.lower()] = ent
 
-        add_field(0, "Width", self.var_width)
-        add_field(1, "Height", self.var_height)
-        add_field(2, "Depth", self.var_depth)
-        add_field(3, "Thickness", self.var_thickness)
+        add_field(0, "Width (dolžina)", self.var_width)
+        add_field(1, "Height (višina)", self.var_height)
+        add_field(2, "Depth (globina)", self.var_depth)
+        add_field(3, "Thickness (debelina)", self.var_thickness)
 
         ttk.Label(form, text="Shelves").grid(row=4, column=0, sticky="w", pady=8, padx=(0, 12))
         self.spin_shelves = ttk.Spinbox(form, from_=0, to=MAX_SHELVES, textvariable=self.var_shelves, width=18)
